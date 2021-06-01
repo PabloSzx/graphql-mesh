@@ -2,8 +2,18 @@
   "name": "@graphql-mesh/odata",
   "version": "0.11.8",
   "sideEffects": false,
-  "main": "dist/index.cjs.js",
-  "module": "dist/index.esm.js",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    },
+    "./*": {
+      "require": "./dist/*.js",
+      "import": "./dist/*.mjs"
+    }
+  },
   "typings": "dist/index.d.ts",
   "typescript": {
     "definition": "dist/index.d.ts"
@@ -18,6 +28,7 @@
   },
   "dependencies": {
     "@graphql-mesh/types": "0.42.0",
+    "@graphql-mesh/store": "0.0.0",
     "@graphql-mesh/utils": "0.12.0",
     "@graphql-tools/utils": "7.10.0",
     "http-string-parser": "0.0.6",

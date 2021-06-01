@@ -1,4 +1,4 @@
-import { MeshPubSub } from '@graphql-mesh/types';
+import { MeshPubSub, ResolverData } from '@graphql-mesh/types';
 import {
   GraphQLSchema,
   GraphQLObjectType,
@@ -108,45 +108,94 @@ export function applyResolversHooksToResolvers(
     }
   }
   return composeResolvers(resolvers, {
-    '*.*': originalResolver => async (root, args, context = {}, info) => {
-      const resolverData = {
-        root,
-        args,
-        context,
-        info,
-      };
-      pubsub.publish('resolverCalled', { resolverData });
+    '*.*':
+      (originalResolver: any) =>
+      async (...resolverArgs: any[]) => {
+        let resolverData: ResolverData;
 
-      try {
-        const proxyContext = new Proxy(context, {
-          get(context, apiName: string) {
-            if (isMeshContext(context)) {
-              const apiContext = context[apiName];
-              if (isAPIContext(apiContext)) {
-                return {
-                  ...apiContext,
-                  api: getSdk(apiContext, nameSchemaMap, info, root, context, 'all'), // To keep to not have breaking changes
-                  apiQuery: getSdk(apiContext, nameSchemaMap, info, root, context, 'query'),
-                  apiMutation: getSdk(apiContext, nameSchemaMap, info, root, context, 'mutation'),
-                  apiSubscription: getSdk(apiContext, nameSchemaMap, info, root, context, 'subscription'),
-                };
+        let isArgsInResolversArgs: boolean;
+
+        if (resolverArgs.length === 3) {
+          resolverData = {
+            root: resolverArgs[0],
+            context: resolverArgs[1] || {},
+            info: resolverArgs[2],
+          };
+          isArgsInResolversArgs = false;
+        } else if (resolverArgs.length === 4) {
+          resolverData = {
+            root: resolverArgs[0],
+            args: resolverArgs[1],
+            context: resolverArgs[2] || {},
+            info: resolverArgs[3],
+          };
+          isArgsInResolversArgs = true;
+        } else {
+          throw new Error('Unexpected resolver params given');
+        }
+
+        pubsub.publish('resolverCalled', { resolverData });
+
+        try {
+          const proxyContext = new Proxy(resolverData.context, {
+            get(context, apiName: string) {
+              if (isMeshContext(context)) {
+                const apiContext = context[apiName];
+                if (isAPIContext(apiContext)) {
+                  return {
+                    ...apiContext,
+                    api: getSdk(
+                      apiContext,
+                      nameSchemaMap,
+                      resolverData.info,
+                      resolverData.root,
+                      resolverData.context,
+                      'all'
+                    ), // To keep to not have breaking changes
+                    apiQuery: getSdk(
+                      apiContext,
+                      nameSchemaMap,
+                      resolverData.info,
+                      resolverData.root,
+                      resolverData.context,
+                      'query'
+                    ),
+                    apiMutation: getSdk(
+                      apiContext,
+                      nameSchemaMap,
+                      resolverData.info,
+                      resolverData.root,
+                      resolverData.context,
+                      'mutation'
+                    ),
+                    apiSubscription: getSdk(
+                      apiContext,
+                      nameSchemaMap,
+                      resolverData.info,
+                      resolverData.root,
+                      resolverData.context,
+                      'subscription'
+                    ),
+                  };
+                }
               }
-            }
-            return context[apiName];
-          },
-        });
+              return context[apiName];
+            },
+          });
 
-        const result = await originalResolver(root, args, proxyContext, info);
+          const result = await (isArgsInResolversArgs
+            ? originalResolver(resolverData.root, resolverData.args, proxyContext, resolverData.info)
+            : originalResolver(resolverData.root, proxyContext, resolverData.info));
 
-        pubsub.publish('resolverDone', { resolverData, result });
+          pubsub.publish('resolverDone', { resolverData, result });
 
-        return result;
-      } catch (error) {
-        pubsub.publish('resolverError', { resolverData, error });
+          return result;
+        } catch (error) {
+          pubsub.publish('resolverError', { resolverData, error });
 
-        throw error;
-      }
-    },
+          throw error;
+        }
+      },
   });
 }
 

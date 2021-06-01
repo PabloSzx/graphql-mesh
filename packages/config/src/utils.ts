@@ -1,17 +1,26 @@
 import { parse } from 'graphql';
-import { MeshHandlerLibrary, KeyValueCache, YamlConfig, MergerFn, ImportFn, MeshPubSub } from '@graphql-mesh/types';
-import { resolve, isAbsolute, join } from 'path';
+import {
+  MeshHandlerLibrary,
+  KeyValueCache,
+  YamlConfig,
+  MergerFn,
+  ImportFn,
+  MeshPubSub,
+  Logger,
+} from '@graphql-mesh/types';
+import { resolve } from 'path';
 import { IResolvers, printSchemaWithDirectives } from '@graphql-tools/utils';
 import { paramCase } from 'param-case';
-import { loadTypedefs } from '@graphql-tools/load';
+import { loadDocuments, loadTypedefs } from '@graphql-tools/load';
 import { GraphQLFileLoader } from '@graphql-tools/graphql-file-loader';
 import { get, set, kebabCase } from 'lodash';
-import { stringInterpolator, pathExists, readJSON } from '@graphql-mesh/utils';
+import { stringInterpolator } from '@graphql-mesh/utils';
 import { mergeResolvers } from '@graphql-tools/merge';
 import { PubSub, withFilter } from 'graphql-subscriptions';
 import { EventEmitter } from 'events';
 import { CodeFileLoader } from '@graphql-tools/code-file-loader';
 import StitchingMerger from '@graphql-mesh/merger-stitching';
+import { MeshStore } from '@graphql-mesh/store';
 
 export async function getPackage<T>(name: string, type: string, importFn: ImportFn): Promise<T> {
   const casedName = paramCase(name);
@@ -158,7 +167,8 @@ export async function resolveAdditionalResolvers(
 
 export async function resolveCache(
   cacheConfig: YamlConfig.Config['cache'],
-  importFn: ImportFn
+  importFn: ImportFn,
+  store: MeshStore
 ): Promise<KeyValueCache | undefined> {
   if (cacheConfig) {
     const cacheName = Object.keys(cacheConfig)[0];
@@ -168,7 +178,10 @@ export async function resolveCache(
     const pkg = await getPackage<any>(moduleName, 'cache', importFn);
     const Cache = pkg.default || pkg;
 
-    return new Cache(config);
+    return new Cache({
+      ...config,
+      store,
+    });
   }
   const InMemoryLRUCache = await import('@graphql-mesh/cache-inmemory-lru').then(m => m.default);
   const cache = new InMemoryLRUCache();
@@ -211,17 +224,51 @@ export async function resolveMerger(mergerConfig: YamlConfig.Config['merger'], i
   return StitchingMerger;
 }
 
-export async function resolveIntrospectionCache(
-  introspectionCacheConfig: YamlConfig.Config['introspectionCache'],
-  dir: string
-): Promise<any> {
-  if (introspectionCacheConfig) {
-    const absolutePath = isAbsolute(introspectionCacheConfig)
-      ? introspectionCacheConfig
-      : join(dir, introspectionCacheConfig);
-    if (await pathExists(absolutePath)) {
-      return readJSON(absolutePath);
+export async function resolveDocuments(documentsConfig: YamlConfig.Config['documents'], cwd: string) {
+  if (!documentsConfig) {
+    return [];
+  }
+  return loadDocuments(documentsConfig, {
+    loaders: [new CodeFileLoader(), new GraphQLFileLoader()],
+    skipGraphQLImport: true,
+    cwd,
+  });
+}
+
+export class DefaultLogger implements Logger {
+  constructor(public name: string) {}
+  log(message: string) {
+    return console.log(this.name + ':' + message);
+  }
+
+  warn(message: string) {
+    return this.log(message);
+  }
+
+  info(message: string) {
+    return this.log(message);
+  }
+
+  error(message: string) {
+    return this.log(message);
+  }
+
+  debug(message: string) {
+    if (process.env.DEBUG) {
+      return this.log(message);
     }
   }
-  return {};
+
+  child(name: string): Logger {
+    return new DefaultLogger(this.name + ' ' + name);
+  }
+}
+
+export async function resolveLogger(loggerConfig: YamlConfig.Config['logger'], importFn: ImportFn): Promise<Logger> {
+  if (typeof loggerConfig === 'string') {
+    const moduleName = kebabCase(loggerConfig.toString());
+    const pkg = await getPackage<any>(moduleName, 'logger', importFn);
+    return pkg.default || pkg;
+  }
+  return new DefaultLogger('Mesh');
 }

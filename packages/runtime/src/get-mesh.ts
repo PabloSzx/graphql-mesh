@@ -101,13 +101,15 @@ export async function getMesh(options: GetMeshOptions): Promise<MeshInstance> {
   });
 
   pubsub.subscribe('resolverDone', ({ result, resolverData }) => {
-    const path = `${resolverData.info.parentType.name}.${resolverData.info.fieldName}`;
-    if (liveQueryInvalidationFactoryMap.has(path)) {
-      const invalidationPathFactories = liveQueryInvalidationFactoryMap.get(path);
-      const invalidationPaths = invalidationPathFactories.map(invalidationPathFactory =>
-        invalidationPathFactory({ ...resolverData, result })
-      );
-      liveQueryStore.invalidate(invalidationPaths);
+    if (resolverData?.info?.parentType && resolverData?.info?.fieldName) {
+      const path = `${resolverData.info.parentType.name}.${resolverData.info.fieldName}`;
+      if (liveQueryInvalidationFactoryMap.has(path)) {
+        const invalidationPathFactories = liveQueryInvalidationFactoryMap.get(path);
+        const invalidationPaths = invalidationPathFactories.map(invalidationPathFactory =>
+          invalidationPathFactory({ ...resolverData, result })
+        );
+        liveQueryStore.invalidate(invalidationPaths);
+      }
     }
   });
 
@@ -197,7 +199,7 @@ export async function getMesh(options: GetMeshOptions): Promise<MeshInstance> {
       operationName
     );
 
-    if ('data' in executionResult) {
+    if ('data' in executionResult || 'errors' in executionResult) {
       if (executionResult.data && !executionResult.errors) {
         return executionResult.data as Result;
       } else {

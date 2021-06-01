@@ -1,8 +1,24 @@
-import { GraphQLSchema, GraphQLObjectType, GraphQLID, isNonNullType, GraphQLNonNull } from 'graphql';
+import {
+  GraphQLSchema,
+  GraphQLObjectType,
+  GraphQLID,
+  isNonNullType,
+  GraphQLNonNull,
+  isObjectType,
+  GraphQLUnionType,
+  printSchema,
+} from 'graphql';
 import { MeshTransform, YamlConfig, MeshTransformOptions } from '@graphql-mesh/types';
 import { loadFromModuleExportExpressionSync } from '@graphql-mesh/utils';
-import { transformSchemaFederation, FederationConfig, FederationFieldsConfig } from 'graphql-transform-federation';
+import { FederationConfig, FederationFieldsConfig } from 'graphql-transform-federation';
+import { addFederationAnnotations } from 'graphql-transform-federation/dist/transform-sdl';
 import { get, set } from 'lodash';
+import { entitiesField, EntityType, serviceField } from '@apollo/federation/dist/types';
+import { mapSchema, MapperKind } from '@graphql-tools/utils';
+
+import federationToStitchingSDL from 'federation-to-stitching-sdl';
+
+import { mergeSchemas } from '@graphql-tools/merge';
 
 export default class FederationTransform implements MeshTransform {
   private config: YamlConfig.Transform['federation'];
@@ -78,6 +94,65 @@ export default class FederationTransform implements MeshTransform {
       }
     }
 
-    return transformSchemaFederation(schema, federationConfig);
+    const entityTypes = Object.fromEntries(
+      Object.entries(federationConfig)
+        .filter(([, { keyFields }]) => keyFields && keyFields.length)
+        .map(([objectName]) => {
+          const type = schema.getType(objectName);
+          if (!isObjectType(type)) {
+            throw new Error(`Type "${objectName}" is not an object type and can't have a key directive`);
+          }
+          return [objectName, type];
+        })
+    );
+
+    const hasEntities = !!Object.keys(entityTypes).length;
+
+    const schemaWithFederationDirectives = addFederationAnnotations(printSchema(schema), federationConfig);
+
+    const sdlWithStitchingDirectives = federationToStitchingSDL(schemaWithFederationDirectives);
+    const schemaWithStitchingDirectives = mergeSchemas({ schemas: [schema], typeDefs: [sdlWithStitchingDirectives] });
+
+    const schemaWithFederationQueryType = mapSchema(schemaWithStitchingDirectives, {
+      [MapperKind.QUERY]: type => {
+        const config = type.toConfig();
+        return new GraphQLObjectType({
+          ...config,
+          fields: {
+            ...config.fields,
+            ...(hasEntities && { _entities: entitiesField }),
+            _service: {
+              ...serviceField,
+              resolve: () => ({ sdl: schemaWithFederationDirectives }),
+            },
+          },
+        });
+      },
+    });
+
+    const schemaWithUnionType = mapSchema(schemaWithFederationQueryType, {
+      [MapperKind.UNION_TYPE]: type => {
+        if (type.name === EntityType.name) {
+          return new GraphQLUnionType({
+            ...EntityType.toConfig(),
+            types: Object.values(entityTypes),
+          });
+        }
+        return type;
+      },
+    });
+
+    // Not using transformSchema since it will remove resolveReference
+    Object.entries(federationConfig).forEach(([objectName, currentFederationConfig]) => {
+      if (currentFederationConfig.resolveReference) {
+        const type = schemaWithUnionType.getType(objectName);
+        if (!isObjectType(type)) {
+          throw new Error(`Type "${objectName}" is not an object type and can't have a resolveReference function`);
+        }
+        type.resolveReference = currentFederationConfig.resolveReference;
+      }
+    });
+
+    return schemaWithUnionType;
   }
 }
