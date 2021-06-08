@@ -150,11 +150,11 @@ export default class GraphQLHandler implements MeshHandler {
             .then(({ schema }) => schema)
         : introspectSchema(introspectionExecutor));
       const queryTypeFromIntrospection = schemaFromIntrospection.getQueryType();
-      // eslint-disable-next-line no-unused-expressions
-      (schemaFromIntrospection.getDirectives() as any[]).splice(0, schemaFromIntrospection.getDirectives().length);
       const queryTypeFieldMap = queryTypeFromIntrospection.getFields();
       if ('_service' in queryTypeFieldMap) {
         const apolloServiceSdl = await fetchApolloServiceSdl();
+        // eslint-disable-next-line no-unused-expressions
+        (schemaFromIntrospection.getDirectives() as any[]).splice(0, schemaFromIntrospection.getDirectives().length);
         return mergeSchemas({
           schemas: [schemaFromIntrospection],
           typeDefs: [federationToStitchingSDL(apolloServiceSdl)],
