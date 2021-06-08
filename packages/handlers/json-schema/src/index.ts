@@ -163,6 +163,7 @@ export default class JsonSchemaHandler implements MeshHandler {
           ...Object.values(this.config.operationHeaders || {}),
           ...Object.values(operationConfig.headers || {}),
           operationConfig.path,
+          this.config.baseUrl,
         ],
         operationConfig.argTypeMap
       );
@@ -216,8 +217,9 @@ export default class JsonSchemaHandler implements MeshHandler {
         field.resolve = async (root, args, context, info) => {
           operationLogger.debug(`=> Resolving`);
           const interpolationData = { root, args, context, info };
+          const interpolatedBaseUrl = stringInterpolator.parse(this.config.baseUrl, interpolationData);
           const interpolatedPath = stringInterpolator.parse(operationConfig.path, interpolationData);
-          const fullPath = urlJoin(this.config.baseUrl, interpolatedPath);
+          const fullPath = urlJoin(interpolatedBaseUrl, interpolatedPath);
           const method = operationConfig.method;
           const headers = {
             ...this.config.operationHeaders,
