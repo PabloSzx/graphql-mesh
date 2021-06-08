@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "grpc:start": "node index.js",
-    "mesh:start": "mesh serve",
+    "mesh:start": "mesh dev",
     "start": "concurrently \"yarn grpc:start\" \"yarn mesh:start\"",
     "test": "jest"
   },

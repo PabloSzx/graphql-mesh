@@ -1,6 +1,6 @@
 type Query {
   """
-  Configuration for `mesh serve` command.
+  Configuration for `mesh start` or `mesh dev` command.
   Those commands won't be available in programmatic usage.
   """
   serve: ServeConfig

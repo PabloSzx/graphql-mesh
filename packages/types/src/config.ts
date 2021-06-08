@@ -50,7 +50,7 @@ export interface Config {
   logger?: any;
 }
 /**
- * Configuration for `mesh serve` command.
+ * Configuration for `mesh start` or `mesh dev` command.
  * Those commands won't be available in programmatic usage.
  */
 export interface ServeConfig {
@@ -992,7 +992,7 @@ export interface FederationField {
 export interface FederationFieldConfig {
   external?: boolean;
   provides?: string;
-  required?: string;
+  requires?: string;
 }
 export interface ResolveReferenceObject {
   targetSource: string;

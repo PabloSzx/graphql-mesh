@@ -6,7 +6,7 @@
   "scripts": {
     "pretest-sdk": "yarn mesh:build",
     "test-sdk": "ts-node src/test-sdk.ts London",
-    "mesh:serve": "mesh serve",
+    "mesh:serve": "mesh dev",
     "mesh:build": "mesh build",
     "start": "yarn mesh:serve"
   },

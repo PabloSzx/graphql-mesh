@@ -2116,7 +2116,7 @@
         "provides": {
           "type": "string"
         },
-        "required": {
+        "requires": {
           "type": "string"
         }
       }
@@ -2506,7 +2506,7 @@
   "properties": {
     "serve": {
       "$ref": "#/definitions/ServeConfig",
-      "description": "Configuration for `mesh serve` command.\nThose commands won't be available in programmatic usage."
+      "description": "Configuration for `mesh start` or `mesh dev` command.\nThose commands won't be available in programmatic usage."
     },
     "require": {
       "type": "array",
